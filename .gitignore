@@ -1,0 +1,36 @@
+# Node modules
+node_modules/
+frontend/node_modules/
+
+# Hardhat artifacts and cache
+artifacts/
+cache/
+coverage/
+coverage.json
+
+# Environment files
+.env
+.env.local
+
+# Logs and temp files
+*.log
+.DS_Store
+Thumbs.db
+
+# Build outputs
+frontend/dist/
+frontend/build/
+
+# Vite cache
+frontend/.vite/
+
+# IDE files
+.idea/
+
+# Lock files
+package-lock.json
+frontend/package-lock.json
+yarn.lock
+frontend/yarn.lock
+pnpm-lock.yaml
+frontend/pnpm-lock.yaml
