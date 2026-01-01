@@ -1,46 +1,99 @@
 /* index.css */
 
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f9;
-    color: #333;
-    margin: 0 auto;
-    max-width: 1200px;
-    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    background-color: #f5f5e8; /* Warm beige background */
+    color: #2d3436;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
     line-height: 1.6;
 }
 
+#root {
+    min-height: 100vh;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
 h1, h2, h3 {
-    color: #4a4a8c;
+    color: #1e3a2f; /* Dark green for headings */
 }
 
 button {
-    background-color: #4a4a8c;
+    background-color: #2d5016; /* Dark green */
     color: white;
     border: none;
-    padding: 10px 15px;
-    border-radius: 5px;
+    padding: 12px 24px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    font-weight: 500;
+    font-size: 14px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(45, 80, 22, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
 }
 
 button:hover {
-    background-color: #3a3a6c;
+    background-color: #3d6a1f; /* Lighter green on hover */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(45, 80, 22, 0.3);
+}
+
+button:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(45, 80, 22, 0.2);
 }
 
 button:disabled {
-    background-color: #ccc;
+    background-color: #a0a0a0;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+button:disabled:hover {
+    transform: none;
+    box-shadow: none;
 }
 
 input, textarea, select {
     width: 100%;
     max-width: 300px;
-    padding: 8px;
+    padding: 10px 12px;
     margin: 5px 0;
-    border: 1px solid #ccc;
-    border-radius: 5px;
+    border: 2px solid #d4c5a9;
+    border-radius: 8px;
     box-sizing: border-box;
+    background-color: #fff;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: #2d5016;
+    box-shadow: 0 0 0 3px rgba(45, 80, 22, 0.1);
 }
 
 form {
@@ -48,6 +101,11 @@ form {
     flex-direction: column;
     max-width: 400px;
     margin: 20px 0;
+    background-color: #fff;
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid #d4c5a9;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 div {
@@ -55,21 +113,30 @@ div {
 }
 
 a {
-    color: #4a4a8c;
+    color: #2d5016;
     text-decoration: none;
+    transition: color 0.3s ease;
 }
 
 a:hover {
+    color: #3d6a1f;
     text-decoration: underline;
 }
 
 /* Card styles */
 .nft-card {
-    background-color: white;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background-color: #fff;
+    border: 1px solid #d4c5a9;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+}
+
+.nft-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    border-color: #2d5016;
 }
 
 /* Loading */
@@ -78,9 +145,108 @@ div[loading] {
     font-style: italic;
 }
 
+/* Loading indicator */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #2d5016;
+    font-size: 18px;
+}
+
+/* Links styled as buttons */
+a[role="button"], 
+.side-panel a {
+    display: inline-block;
+    background-color: #2d5016;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(45, 80, 22, 0.2);
+    margin: 10px 0;
+}
+
+a[role="button"]:hover, 
+.side-panel a:hover {
+    background-color: #3d6a1f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(45, 80, 22, 0.3);
+    text-decoration: none;
+}
+
+/* Certificate status styling */
+.user-info p:last-child {
+    color: #2d5016;
+    font-weight: 600;
+}
+
+/* Assemble list styling */
+.assemble-list {
+    background-color: #fff;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #d4c5a9;
+    margin: 16px 0;
+}
+
+.assemble-list > div {
+    padding: 8px;
+    margin: 4px 0;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.assemble-list > div:hover {
+    background-color: #f5f5e8;
+}
+
+/* Back link styling */
+a[href="/"]:not(.side-panel a),
+a[href*="/nft/"]:not(.side-panel a) {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 8px 16px;
+    background-color: #fff;
+    color: #2d5016;
+    border: 2px solid #2d5016;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+a[href="/"]:not(.side-panel a):hover,
+a[href*="/nft/"]:not(.side-panel a):hover {
+    background-color: #2d5016;
+    color: white;
+    transform: translateX(-4px);
+    text-decoration: none;
+}
+
+/* View Details links in cards */
+.nft-card a {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 8px 16px;
+    background-color: #2d5016;
+    color: white;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.nft-card a:hover {
+    background-color: #3d6a1f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(45, 80, 22, 0.3);
+    text-decoration: none;
+}
+
 /* Specific classes if needed */
 .input-bordered {
-    border: 2px solid #4a4a8c;
+    border: 2px solid #2d5016;
 }
 
 /* Dashboard layout */
@@ -96,16 +262,53 @@ div[loading] {
     margin-bottom: 20px;
 }
 
+.menu {
+    display: flex;
+    gap: 10px;
+}
+
 .menu button {
-    margin-right: 10px;
+    margin-right: 0;
+    background-color: #fff;
+    color: #2d5016;
+    border: 2px solid #2d5016;
+    padding: 10px 20px;
+}
+
+.menu button:hover {
+    background-color: #2d5016;
+    color: white;
+}
+
+.menu button.active {
+    background-color: #2d5016;
+    color: white;
+    box-shadow: 0 2px 8px rgba(45, 80, 22, 0.3);
 }
 
 .user-info {
     text-align: right;
+    background: linear-gradient(135deg, #ffffff 0%, #f9f9f5 100%);
+    border: 1px solid #d4c5a9;
+    border-radius: 12px;
+    padding: 12px 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
+    display: inline-block;
+    min-width: 200px;
 }
 
 .user-info p {
-    margin: 5px 0;
+    margin: 6px 0;
+    font-size: 14px;
+    color: #2d3436;
+    font-weight: 500;
+}
+
+.user-info p:first-child {
+    color: #2d5016;
+    font-weight: 600;
+    font-size: 15px;
 }
 
 .main-content {
@@ -126,4 +329,255 @@ div[loading] {
     grid-template-columns: repeat(auto-fit, minmax(250px, 250px));
     gap: 15px;
     justify-content: center;
+}
+
+/* Mint Form Styling */
+.mint-form-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Info Section */
+.info-section {
+    background: linear-gradient(135deg, #ffffff 0%, #f9f9f5 100%);
+    border: 1px solid #d4c5a9;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 30px;
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.info-label {
+    font-size: 13px;
+    color: #666;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.info-value {
+    font-size: 16px;
+    color: #2d5016;
+    font-weight: 600;
+}
+
+.info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: #2d5016;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: help;
+    transition: all 0.2s ease;
+}
+
+.info-icon:hover {
+    background-color: #3d6a1f;
+    transform: scale(1.1);
+}
+
+/* Tooltip Component */
+.tooltip-container {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: #2d5016;
+    color: white;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: help;
+    margin-left: 6px;
+    transition: all 0.2s ease;
+}
+
+.tooltip-icon:hover {
+    background-color: #3d6a1f;
+    transform: scale(1.1);
+}
+
+.tooltip-content {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    padding: 10px 14px;
+    background-color: #2d3436;
+    color: white;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: normal;
+    width: 280px;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+}
+
+.tooltip-content::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #2d3436;
+}
+
+/* Form Field Wrapper */
+.form-field-wrapper {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #1e3a2f;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.form-input {
+    width: 100%;
+    max-width: 100%;
+    padding: 12px 14px;
+    margin: 0;
+    border: 2px solid #d4c5a9;
+    border-radius: 8px;
+    box-sizing: border-box;
+    background-color: #fff;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #2d5016;
+    box-shadow: 0 0 0 3px rgba(45, 80, 22, 0.1);
+}
+
+/* Date Input Styling - Make it visually distinct */
+.date-input {
+    background: linear-gradient(135deg, #f9f5e8 0%, #fff5e6 100%) !important;
+    border: 2px solid #2d5016 !important;
+    border-style: dashed !important;
+    position: relative;
+    font-weight: 500;
+}
+
+.date-input::placeholder {
+    color: #2d5016;
+    opacity: 0.6;
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 1;
+    margin-left: 8px;
+    padding: 4px;
+    background-color: #2d5016;
+    border-radius: 4px;
+    filter: brightness(1.2);
+}
+
+.date-input::-webkit-calendar-picker-indicator:hover {
+    background-color: #3d6a1f;
+    transform: scale(1.1);
+}
+
+/* Form Sections */
+.form-section {
+    margin: 30px 0;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 12px;
+    border: 1px solid #d4c5a9;
+}
+
+.form-section h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1e3a2f;
+}
+
+/* Dimensions Grid */
+.dimensions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+}
+
+/* Assemble List Updates */
+.assemble-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.assemble-item:hover {
+    background-color: #f5f5e8;
+}
+
+.assemble-item input[type="checkbox"] {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    cursor: pointer;
+}
+
+.assemble-item label {
+    cursor: pointer;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* Submit Button */
+.submit-button {
+    width: 100%;
+    max-width: 400px;
+    margin: 30px auto 0;
+    display: block;
+    padding: 16px 32px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* Textarea styling */
+textarea.form-input {
+    min-height: 120px;
+    resize: vertical;
+    font-family: inherit;
 }

@@ -94,7 +94,51 @@ contract MaterialNFT is ERC721, Ownable {
 
     function updateStatus(uint256 tokenId, Status _newStatus) external {
         require(ownerOf(tokenId) == msg.sender, "Only owner can update status");
+        
+        Status currentStatus = materials[tokenId].status;
+        
+        // Validate state transitions based on lifecycle diagram
+        require(isValidTransition(currentStatus, _newStatus), "Invalid status transition");
+        
         materials[tokenId].status = _newStatus;
+    }
+
+    /**
+     * @dev Validates if a status transition is allowed 
+     * Valid transitions:
+     * - Available -> InTransit
+     * - Available -> Assembled
+     * - InTransit -> Delivered
+     * - Delivered -> Assembled
+     * - Delivered -> Available
+     */
+    function isValidTransition(Status _currentStatus, Status _newStatus) internal pure returns (bool) {
+        // Cannot transition to the same status
+        if (_currentStatus == _newStatus) {
+            return false;
+        }
+
+        // Available (0) can transition to InTransit (1) or Assembled (3)
+        if (_currentStatus == Status.Available) {
+            return _newStatus == Status.InTransit || _newStatus == Status.Assembled;
+        }
+
+        // InTransit (1) can transition to Delivered (2) or back to Available (0)
+        if (_currentStatus == Status.InTransit) {
+            return _newStatus == Status.Delivered;
+        }
+
+        // Delivered (2) can transition to Assembled (3) or back to Available (0)
+        if (_currentStatus == Status.Delivered) {
+            return _newStatus == Status.Assembled || _newStatus == Status.Available;
+        }
+
+        // Assembled (3) is a terminal state - no transitions allowed
+        if (_currentStatus == Status.Assembled) {
+            return false;
+        }
+
+        return false;
     }
 
     function tokenURI(uint256 tokenId)

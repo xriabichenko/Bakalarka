@@ -3,6 +3,8 @@ import { ethers } from 'ethers'
 import { formatEther, parseEther } from 'ethers'
 import QRCode from "qrcode"
 import { BrowserRouter as Router, Route, Routes, Link, useParams, useNavigate } from 'react-router-dom'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useAccount, useWalletClient } from 'wagmi'
 
 import contractAddresses from "./contractAddresses.json";
 
@@ -19,6 +21,9 @@ import MaterialABI from './abi/MaterialNFT.json'
 import MarketplaceABI from './abi/Marketplace.json'
 
 function App() {
+    const { address: wagmiAddress, isConnected } = useAccount()
+    const { data: walletClient } = useWalletClient()
+    
     const [provider, setProvider] = useState(null)
     const [signer, setSigner] = useState(null)
     const [address, setAddress] = useState('')
@@ -30,22 +35,28 @@ function App() {
     const [loading, setLoading] = useState(false)
     const [allTokens, setAllTokens] = useState([])
 
+    // Convert wagmi walletClient to ethers signer/provider
+    useEffect(() => {
+        if (isConnected && wagmiAddress && window.ethereum) {
+            const provider = new ethers.BrowserProvider(window.ethereum)
+            provider.getSigner().then(sig => {
+                setProvider(provider)
+                setSigner(sig)
+                setAddress(wagmiAddress)
+            }).catch(err => {
+                console.error('Error getting signer:', err)
+            })
+        } else {
+            setProvider(null)
+            setSigner(null)
+            setAddress('')
+        }
+    }, [isConnected, wagmiAddress])
+
     const soulboundContract = signer ? new ethers.Contract(SOULBOUND_ADDR, SoulBoundABI.abi, signer) : null
     const certificateContract = signer ? new ethers.Contract(CERTIFICATE_ADDR, CertificateABI.abi, signer) : null
     const materialContract = signer ? new ethers.Contract(MATERIAL_ADDR, MaterialABI.abi, signer) : null
     const marketContract = signer ? new ethers.Contract(MARKETPLACE_ADDR, MarketplaceABI.abi, signer) : null
-
-    const connectWallet = async () => {
-        if (!window.ethereum) return alert('Please install MetaMask')
-        const prov = new ethers.BrowserProvider(window.ethereum)
-        await prov.send("eth_requestAccounts", [])
-        const sig = await prov.getSigner()
-        const addr = await sig.getAddress()
-        setProvider(prov)
-        setSigner(sig)
-        setAddress(addr)
-        loadUserData(addr, sig)
-    }
 
     const loadUserData = async (addr, sig) => {
         setLoading(true)
@@ -167,6 +178,52 @@ function App() {
         setCertValid(false)
     }
 
+    // Tooltip component
+    const Tooltip = ({ text, children }) => {
+        const [show, setShow] = useState(false)
+        return (
+            <div className="tooltip-container">
+                <span 
+                    className="tooltip-icon"
+                    onMouseEnter={() => setShow(true)}
+                    onMouseLeave={() => setShow(false)}
+                >
+                    {children || '?'}
+                </span>
+                {show && (
+                    <div className="tooltip-content">
+                        {text}
+                    </div>
+                )}
+            </div>
+        )
+    }
+
+    // Form field wrapper with label and tooltip
+    const FormField = ({ label, name, type = "text", placeholder, required, tooltip, value, readOnly, onChange, className, children }) => {
+        const isDateField = type === "date"
+        return (
+            <div className="form-field-wrapper">
+                <label className="form-label">
+                    {label}
+                    {tooltip && <Tooltip text={tooltip} />}
+                </label>
+                {children || (
+                    <input
+                        type={type}
+                        name={name}
+                        placeholder={placeholder}
+                        required={required}
+                        value={value}
+                        readOnly={readOnly}
+                        onChange={onChange}
+                        className={`form-input ${isDateField ? 'date-input' : ''} ${className || ''}`}
+                    />
+                )}
+            </div>
+        )
+    }
+
     const MintForm = () => {
         const navigate = useNavigate()
         const [assembleTokens, setAssembleTokens] = useState([])
@@ -231,7 +288,7 @@ function App() {
                 name: form.name.value,
                 description: form.description.value,
                 supplierName: form.supplierName.value,
-                certificationId: form.certificationId.value,
+                certificationId: certificationId, // Use state value instead of form
                 manufactureDate: form.manufactureDate.value,
                 batchNumber: form.batchNumber.value,
                 count: Number(form.count.value),
@@ -299,49 +356,168 @@ function App() {
         }
 
         return (
-            <div>
+            <div className="mint-form-container">
                 <Link to="/">Back</Link>
                 <h1>Mint New Material NFT</h1>
 
+                {/* Info Section */}
+                <div className="info-section">
+                    <div className="info-item">
+                        <span className="info-label">
+                            NFT Status: <Tooltip text="All newly minted NFTs start with status 'Available'. This status will change as the material moves through logistics, delivery, and installation.">
+                                <span className="info-icon">?</span>
+                            </Tooltip>
+                        </span>
+                        <span className="info-value">Available</span>
+                    </div>
+                    {certificationId && (
+                        <div className="info-item">
+                            <span className="info-label">
+                                Certificate ID: <Tooltip text={`Your certificate ID is automatically set to: ${certificationId}. This links your material to your supplier certificate.`}>
+                                    <span className="info-icon">?</span>
+                                </Tooltip>
+                            </span>
+                            <span className="info-value">{certificationId}</span>
+                        </div>
+                    )}
+                </div>
+
                 <form onSubmit={handleMintSubmit}>
-                    <input name="name" placeholder="Product Name" required/>
-                    <input name="supplierName" placeholder="Supplier Name" required/>
-                    <input name="certificationId" value={certificationId} readOnly required/>
-                    <input type="date" name="manufactureDate" required/>
-                    <input name="batchNumber" placeholder="Batch Number" required/>
-                    <input type="number" name="count" placeholder="Quantity" required/>
-                    <input type="number" name="weight" placeholder="Weight" required/>
-                    <input name="measureUnit" placeholder="Unit"/>
+                    <FormField
+                        label="Product Name"
+                        name="name"
+                        placeholder="Enter the name of the product/material"
+                        required
+                        tooltip="The name of the construction material or product. Example: 'Steel Beam Type A', 'Concrete Mix C30'"
+                    />
 
-                    <input type="number" name="length" placeholder="Length"/>
-                    <input type="number" name="width" placeholder="Width"/>
-                    <input type="number" name="height" placeholder="Height"/>
-                    <input type="number" name="customExpiration"
-                           placeholder="Expiration Unix timestamp (optional)"
-                           className="input input-bordered"/>
-                    <textarea name="description" placeholder="Description" required/>
+                    <FormField
+                        label="Supplier Name"
+                        name="supplierName"
+                        placeholder="Enter your supplier name"
+                        required
+                        tooltip="Your registered supplier name. This will be displayed on the NFT and used for provenance tracking."
+                    />
 
-                    <input type="text" value="Available" readOnly />
+                    <FormField
+                        label="Manufacture Date"
+                        name="manufactureDate"
+                        type="date"
+                        required
+                        tooltip="The date when the material was manufactured. Select a date in MM/DD/YYYY format. This is important for tracking material age and compliance."
+                    />
 
-                    <h3>Select materials to assemble (optional)</h3>
-                    <div className="assemble-list">
-                        {assembleTokens.length === 0 ? (
-                            <p>No materials available for assembly</p>
-                        ) : (
-                            assembleTokens.map(id => (
-                                <div key={id}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedTokens.includes(id)}
-                                        onChange={() => toggleSelect(id)}
-                                    />
-                                    Material #{id}
-                                </div>
-                            ))
-                        )}
+                    <FormField
+                        label="Batch Number"
+                        name="batchNumber"
+                        placeholder="Enter batch number"
+                        required
+                        tooltip="A unique identifier for the production batch. This helps track materials from the same production run. Example: 'BATCH-2024-001'"
+                    />
+
+                    <FormField
+                        label="Quantity"
+                        name="count"
+                        type="number"
+                        placeholder="Enter quantity"
+                        required
+                        tooltip="The number of units in this batch. Must be a positive whole number. Example: 100, 50, 1000"
+                    />
+
+                    <FormField
+                        label="Weight"
+                        name="weight"
+                        type="number"
+                        placeholder="Enter weight"
+                        required
+                        tooltip="The total weight of the material. Enter a positive number. Example: 500, 1250.5"
+                    />
+
+                    <FormField
+                        label="Unit"
+                        name="measureUnit"
+                        placeholder="Enter unit of measurement"
+                        tooltip="The unit of measurement for weight. Common units: kg, lbs, tons, grams. Example: 'kg', 'lbs'"
+                    />
+
+                    <div className="form-section">
+                        <h3>Dimensions (Optional)</h3>
+                        <div className="dimensions-grid">
+                            <FormField
+                                label="Length"
+                                name="length"
+                                type="number"
+                                placeholder="Length"
+                                tooltip="Length of the material in your preferred unit (meters, feet, etc.). Leave empty if not applicable."
+                            />
+                            <FormField
+                                label="Width"
+                                name="width"
+                                type="number"
+                                placeholder="Width"
+                                tooltip="Width of the material in your preferred unit. Leave empty if not applicable."
+                            />
+                            <FormField
+                                label="Height"
+                                name="height"
+                                type="number"
+                                placeholder="Height"
+                                tooltip="Height of the material in your preferred unit. Leave empty if not applicable."
+                            />
+                        </div>
                     </div>
 
-                    <button type="submit">{selectedTokens.length > 0 ? 'Assemble and Mint' : 'Mint'}</button>
+                    <FormField
+                        label="Description"
+                        name="description"
+                        required
+                        tooltip="A detailed description of the material, including specifications, quality standards, and any relevant information for buyers and auditors."
+                    >
+                        <textarea 
+                            name="description" 
+                            placeholder="Enter detailed description"
+                            className="form-input"
+                            required
+                        />
+                    </FormField>
+
+                    <FormField
+                        label="Custom Expiration (Optional)"
+                        name="customExpiration"
+                        type="number"
+                        placeholder="Unix timestamp (optional)"
+                        tooltip="Optional: Unix timestamp for custom expiration. If not provided, default expiration will be used. Must be a future timestamp."
+                        className="input input-bordered"
+                    />
+
+                    <div className="form-section">
+                        <h3>
+                            Select materials to assemble (optional)
+                            <Tooltip text="If you want to create a composite material by assembling multiple existing materials, select them here. The selected materials will be marked as 'Assembled' and cannot be used again.">
+                                <span className="info-icon">?</span>
+                            </Tooltip>
+                        </h3>
+                        <div className="assemble-list">
+                            {assembleTokens.length === 0 ? (
+                                <p>No materials available for assembly</p>
+                            ) : (
+                                assembleTokens.map(id => (
+                                    <div key={id} className="assemble-item">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedTokens.includes(id)}
+                                            onChange={() => toggleSelect(id)}
+                                        />
+                                        <label>Material #{id}</label>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    <button type="submit" className="submit-button">
+                        {selectedTokens.length > 0 ? 'Assemble and Mint' : 'Mint NFT'}
+                    </button>
                 </form>
             </div>
         )
@@ -419,6 +595,32 @@ function App() {
         const [price, setPrice] = useState('')
         const [consumedTokenIds, setConsumedTokenIds] = useState([])
 
+        // Helper function to get valid status transitions based on current status
+        const getValidStatusTransitions = (currentStatus) => {
+            const status = Number(currentStatus)
+            // Available (0) can transition to InTransit (1) or Assembled (3)
+            if (status === 0) {
+                return [
+                    { value: 1, label: 'In Transit' }
+                ]
+            }
+            // InTransit (1) can transition to Delivered (2)
+            if (status === 1) {
+                return [
+                    { value: 2, label: 'Delivered' }
+                ]
+            }
+            // Delivered (2) can transition to Assembled (3) or Available (0)
+            if (status === 2) {
+                return [
+                    { value: 3, label: 'Assembled' },
+                    { value: 0, label: 'Available' }
+                ]
+            }
+            // Assembled (3) is terminal - no transitions
+            return []
+        }
+
         useEffect(() => {
             if (!provider) return
             const fetchData = async () => {
@@ -426,7 +628,14 @@ function App() {
                 try {
                     const mat = await contract.materials(tokenId)
                     setMaterial(mat)
-                    setNewStatus(Number(mat.status))
+                    
+                    // Set initial status to first valid transition option
+                    const validTransitions = getValidStatusTransitions(mat.status)
+                    if (validTransitions.length > 0) {
+                        setNewStatus(validTransitions[0].value)
+                    } else {
+                        setNewStatus(Number(mat.status))
+                    }
 
                     const own = await contract.ownerOf(tokenId)
                     setOwner(own.toLowerCase())
@@ -478,12 +687,27 @@ function App() {
         const handleUpdateStatus = async () => {
             if (!signer || owner !== address.toLowerCase()) return alert('Not owner or not connected')
             if (Number(material.status) === 3) return alert('Assembled NFT status cannot be updated')
+            
+            // Validate transition on frontend before sending
+            const validTransitions = getValidStatusTransitions(material.status)
+            const isValid = validTransitions.some(t => t.value === newStatus)
+            if (!isValid) {
+                return alert('Invalid status transition. Please select a valid status.')
+            }
+            
             try {
                 const tx = await materialContract.updateStatus(tokenId, newStatus)
                 await tx.wait()
                 // Refresh data
                 const mat = await materialContract.materials(tokenId)
                 setMaterial(mat)
+                // Set newStatus to first valid transition option for the updated status
+                const validTransitions = getValidStatusTransitions(mat.status)
+                if (validTransitions.length > 0) {
+                    setNewStatus(validTransitions[0].value)
+                } else {
+                    setNewStatus(Number(mat.status))
+                }
                 alert('Status updated')
             } catch (err) {
                 alert('Error: ' + err.message)
@@ -528,6 +752,7 @@ function App() {
 
         return (
             <div>
+            
                 <Link to="/">Back to Dashboard</Link>
                 <h1>Material NFT #{tokenId}</h1>
                 <h2>Static Metadata (from IPFS)</h2>
@@ -560,13 +785,22 @@ function App() {
                 {owner === address.toLowerCase() && Number(material.status) !== 3 && (
                     <div>
                         <h3>Update Status</h3>
-                        <select value={newStatus} onChange={(e) => setNewStatus(Number(e.target.value))}>
-                            <option value={0}>Available</option>
-                            <option value={1}>In Transit</option>
-                            <option value={2}>Delivered</option>
-                            <option value={3}>Assembled</option>
+                        <select 
+                            value={newStatus} 
+                            onChange={(e) => setNewStatus(Number(e.target.value))}
+                        >
+                            {getValidStatusTransitions(material.status).map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
                         </select>
                         <button onClick={handleUpdateStatus}>Update</button>
+                        {getValidStatusTransitions(material.status).length === 0 && (
+                            <p style={{ color: '#d32f2f', fontSize: '14px', marginTop: '8px' }}>
+                                No valid status transitions available
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -613,13 +847,22 @@ function App() {
             <div className="dashboard">
                 <div className="header">
                     <div className="menu">
-                        <button onClick={() => setView('myMaterials')}>My Materials</button>
-                        <button onClick={() => setView('marketplace')}>Marketplace</button>
+                        <button 
+                            className={view === 'myMaterials' ? 'active' : ''}
+                            onClick={() => setView('myMaterials')}
+                        >
+                            My Materials
+                        </button>
+                        <button 
+                            className={view === 'marketplace' ? 'active' : ''}
+                            onClick={() => setView('marketplace')}
+                        >
+                            Marketplace
+                        </button>
                     </div>
                     <div className="user-info">
                         <p>Registered as: {role}</p>
                         {role === 'Supplier' && <p>Certificate: {certValid ? "Valid" : "Not valid"}</p>}
-                        <p>Address: {address}</p>
                     </div>
                 </div>
                 <div className="main-content">
@@ -690,15 +933,20 @@ function App() {
     return (
         <Router>
             <div>
+                {/* Connect/Disconnect Button at top left */}
+                <div style={{ position: 'fixed', top: '20px', left: '20px', zIndex: 1000 }}>
+                    <ConnectButton />
+                </div>
+
                 {loading && <div>Loading...</div>}
 
-                {!address ? (
-                    <div>
+                {!isConnected || !address ? (
+                    <div style={{ paddingTop: '80px', textAlign: 'center' }}>
                         <h1>Construction Material Provenance</h1>
-                        <button onClick={connectWallet}>Connect Wallet</button>
+                        <p>Please connect your wallet to continue</p>
                     </div>
                 ) : role === 'Not registered' ? (
-                    <div>
+                    <div style={{ paddingTop: '80px' }}>
                         <div>
                             <h2>Register as Buyer</h2>
                             <p>You will be able to browse and buy materials</p>

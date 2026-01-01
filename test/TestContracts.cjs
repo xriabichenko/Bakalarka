@@ -223,6 +223,148 @@ describe("Tests", function () {
             ).to.be.revertedWith("Only owner can update status");
         });
 
+        // ------------------------------------------------------------------------
+        // Status Transition Tests
+        // ------------------------------------------------------------------------
+        describe("Status Transition Validation", function () {
+            beforeEach(async function () {
+                await soulBoundRole.connect(supplier).registerUser(1);
+                await certificateNFT.connect(owner).issueCertificate(supplier.address, 0, "ipfs://cert");
+            });
+
+            it("Should allow transition from Available to InTransit", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test1");
+                await materialNFT.connect(supplier).updateStatus(1, 1); // Available -> InTransit
+                const mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(1); // InTransit
+            });
+
+            it("Should allow transition from Available to Assembled", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test2");
+                await materialNFT.connect(supplier).updateStatus(1, 3); // Available -> Assembled
+                const mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(3); // Assembled
+            });
+
+            it("Should allow transition from InTransit to Delivered", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test3");
+                await materialNFT.connect(supplier).updateStatus(1, 1); // Available -> InTransit
+                await materialNFT.connect(supplier).updateStatus(1, 2); // InTransit -> Delivered
+                const mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(2); // Delivered
+            });
+
+            it("Should allow transition from Delivered to Assembled", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test5");
+                await materialNFT.connect(supplier).updateStatus(1, 1); // Available -> InTransit
+                await materialNFT.connect(supplier).updateStatus(1, 2); // InTransit -> Delivered
+                await materialNFT.connect(supplier).updateStatus(1, 3); // Delivered -> Assembled
+                const mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(3); // Assembled
+            });
+
+            it("Should allow transition from Delivered back to Available", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test6");
+                await materialNFT.connect(supplier).updateStatus(1, 1); // Available -> InTransit
+                await materialNFT.connect(supplier).updateStatus(1, 2); // InTransit -> Delivered
+                await materialNFT.connect(supplier).updateStatus(1, 0); // Delivered -> Available
+                const mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(0); // Available
+            });
+
+            it("Should prevent transition from Available to Delivered", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test7");
+                await expect(
+                    materialNFT.connect(supplier).updateStatus(1, 2) // Available -> Delivered (invalid)
+                ).to.be.revertedWith("Invalid status transition");
+            });
+
+            it("Should prevent transition from InTransit to Assembled", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test8");
+                await materialNFT.connect(supplier).updateStatus(1, 1); // Available -> InTransit
+                await expect(
+                    materialNFT.connect(supplier).updateStatus(1, 3) // InTransit -> Assembled (invalid)
+                ).to.be.revertedWith("Invalid status transition");
+            });
+
+            it("Should prevent transition from Delivered to InTransit", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test9");
+                await materialNFT.connect(supplier).updateStatus(1, 1); // Available -> InTransit
+                await materialNFT.connect(supplier).updateStatus(1, 2); // InTransit -> Delivered
+                await expect(
+                    materialNFT.connect(supplier).updateStatus(1, 1) // Delivered -> InTransit (invalid)
+                ).to.be.revertedWith("Invalid status transition");
+            });
+
+            it("Should prevent transition from Assembled to any other status", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test10");
+                await materialNFT.connect(supplier).updateStatus(1, 3); // Available -> Assembled
+                
+                // Try to transition to Available
+                await expect(
+                    materialNFT.connect(supplier).updateStatus(1, 0) // Assembled -> Available (invalid)
+                ).to.be.revertedWith("Invalid status transition");
+
+                // Try to transition to InTransit
+                await expect(
+                    materialNFT.connect(supplier).updateStatus(1, 1) // Assembled -> InTransit (invalid)
+                ).to.be.revertedWith("Invalid status transition");
+
+                // Try to transition to Delivered
+                await expect(
+                    materialNFT.connect(supplier).updateStatus(1, 2) // Assembled -> Delivered (invalid)
+                ).to.be.revertedWith("Invalid status transition");
+            });
+
+            it("Should prevent transition to the same status", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test11");
+                await materialNFT.connect(supplier).updateStatus(1, 1); // Available -> InTransit
+                
+                // Try to transition to the same status
+                await expect(
+                    materialNFT.connect(supplier).updateStatus(1, 1) // InTransit -> InTransit (invalid)
+                ).to.be.revertedWith("Invalid status transition");
+            });
+
+            it("Should allow complete lifecycle: Available -> InTransit -> Delivered -> Assembled", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test12");
+                
+                // Available -> InTransit
+                await materialNFT.connect(supplier).updateStatus(1, 1);
+                let mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(1);
+
+                // InTransit -> Delivered
+                await materialNFT.connect(supplier).updateStatus(1, 2);
+                mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(2);
+
+                // Delivered -> Assembled
+                await materialNFT.connect(supplier).updateStatus(1, 3);
+                mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(3);
+            });
+
+            it("Should allow return path: Available -> InTransit -> Delivered -> Available", async function () {
+                await materialNFT.connect(supplier).mint("ipfs://test14");
+                
+                // Available -> InTransit
+                await materialNFT.connect(supplier).updateStatus(1, 1);
+                let mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(1);
+
+                // InTransit -> Delivered
+                await materialNFT.connect(supplier).updateStatus(1, 2);
+                mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(2);
+
+                // Delivered -> Available (return/re-list)
+                await materialNFT.connect(supplier).updateStatus(1, 0);
+                mat = await materialNFT.materials(1);
+                expect(mat.status).to.equal(0);
+            });
+        });
+
         it("Should revert getExpiration for nonexistent token", async function () {
             await expect(materialNFT.getExpiration(999)).to.be.revertedWith("Token does not exist");
         });

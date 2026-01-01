@@ -29,7 +29,7 @@ async function main() {
     const Marketplace = await ethers.getContractFactory("Marketplace");
     const marketplace = Marketplace.attach(addresses.Marketplace);
 
-    const numRuns = 5; // You can increase to 20
+    const numRuns = 100; // You can increase to 20
     const gasPriceGwei = 0.029; // Current real gas price (Dec 28, 2025)
     const ethPriceUSD = 2937;   // Current ETH price ≈ $2,937 USD
 
