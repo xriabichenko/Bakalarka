@@ -842,6 +842,103 @@ function App() {
 
     const Dashboard = () => {
         const [view, setView] = useState('myMaterials');
+        const [filtersOpen, setFiltersOpen] = useState(false);
+        const [filters, setFilters] = useState({
+            name: '',
+            supplierName: '',
+            batchNumber: '',
+            description: ''
+        });
+        const [materialsMetadata, setMaterialsMetadata] = useState({}); // tokenId -> metadata mapping
+
+        // Load metadata for all materials (owned and marketplace)
+        useEffect(() => {
+            const loadAllMetadata = async () => {
+                if (!provider || !materialContract) return
+                
+                const allTokenIds = new Set([...ownedTokens, ...marketListings.map(l => l.tokenId)])
+                const metadataMap = {}
+                
+                for (const tokenId of allTokenIds) {
+                    try {
+                        const mat = await materialContract.materials(tokenId)
+                        if (mat.metadataURI && mat.metadataURI.startsWith(PINATA_GATEWAY)) {
+                            const cid = mat.metadataURI.replace(PINATA_GATEWAY + '/', '')
+                            const res = await fetch(`${PINATA_GATEWAY}/${cid}`)
+                            if (res.ok) {
+                                const metadata = await res.json()
+                                metadataMap[tokenId] = metadata
+                            }
+                        }
+                    } catch (err) {
+                        console.error(`Error loading metadata for token ${tokenId}:`, err)
+                    }
+                }
+                
+                setMaterialsMetadata(metadataMap)
+            }
+            
+            loadAllMetadata()
+        }, [provider, materialContract, ownedTokens, marketListings])
+
+        // Filter function - checks if material matches all active filters
+        const matchesFilters = (tokenId, metadata) => {
+            if (!metadata) return false
+            
+            // Check each filter - all must match (AND logic)
+            if (filters.name && !metadata.name?.toLowerCase().includes(filters.name.toLowerCase())) {
+                return false
+            }
+            if (filters.supplierName && !metadata.supplierName?.toLowerCase().includes(filters.supplierName.toLowerCase())) {
+                return false
+            }
+            if (filters.batchNumber && !metadata.batchNumber?.toLowerCase().includes(filters.batchNumber.toLowerCase())) {
+                return false
+            }
+            if (filters.description && !metadata.description?.toLowerCase().includes(filters.description.toLowerCase())) {
+                return false
+            }
+            
+            return true
+        }
+
+        // Get filtered tokens for My Materials view
+        const getFilteredOwnedTokens = () => {
+            if (Object.keys(filters).every(key => !filters[key])) {
+                return ownedTokens // No filters active, return all
+            }
+            return ownedTokens.filter(tokenId => {
+                const metadata = materialsMetadata[tokenId]
+                return matchesFilters(tokenId, metadata)
+            })
+        }
+
+        // Get filtered listings for Marketplace view
+        const getFilteredMarketListings = () => {
+            if (Object.keys(filters).every(key => !filters[key])) {
+                return marketListings // No filters active, return all
+            }
+            return marketListings.filter(listing => {
+                const metadata = materialsMetadata[listing.tokenId]
+                return matchesFilters(listing.tokenId, metadata)
+            })
+        }
+
+        const handleFilterChange = (field, value) => {
+            setFilters(prev => ({
+                ...prev,
+                [field]: value
+            }))
+        }
+
+        const clearFilters = () => {
+            setFilters({
+                name: '',
+                supplierName: '',
+                batchNumber: '',
+                description: ''
+            })
+        }
 
         return (
             <div className="dashboard">
@@ -867,14 +964,92 @@ function App() {
                 </div>
                 <div className="main-content">
                     <div className="large-container">
+                        {/* Filter Toggle Button */}
+                        <div className="filter-toggle-container">
+                            <button 
+                                className="filter-toggle-btn"
+                                onClick={() => setFiltersOpen(!filtersOpen)}
+                            >
+                            
+                                <span>Filters</span>
+                                {Object.keys(filters).some(key => filters[key]) && (
+                                    <span className="filter-badge">{Object.values(filters).filter(f => f).length}</span>
+                                )}
+                                <span className={`filter-arrow ${filtersOpen ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {Object.keys(filters).some(key => filters[key]) && (
+                                <button 
+                                    className="clear-filters-btn-inline"
+                                    onClick={clearFilters}
+                                >
+                                    Clear All
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Filter Section */}
+                        {filtersOpen && (
+                            <div className="filter-section">
+                                <div className="filter-grid">
+                                <div className="filter-field">
+                                    <label>Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Filter by name"
+                                        value={filters.name}
+                                        onChange={(e) => handleFilterChange('name', e.target.value)}
+                                    />
+                                </div>
+                                <div className="filter-field">
+                                    <label>Supplier Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Filter by supplier"
+                                        value={filters.supplierName}
+                                        onChange={(e) => handleFilterChange('supplierName', e.target.value)}
+                                    />
+                                </div>
+                                <div className="filter-field">
+                                    <label>Batch Number</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Filter by batch number"
+                                        value={filters.batchNumber}
+                                        onChange={(e) => handleFilterChange('batchNumber', e.target.value)}
+                                    />
+                                </div>
+                                <div className="filter-field">
+                                    <label>Description</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Filter by description"
+                                        value={filters.description}
+                                        onChange={(e) => handleFilterChange('description', e.target.value)}
+                                    />
+                                </div>
+                                </div>
+                                {Object.keys(filters).some(key => filters[key]) && (
+                                    <p className="filter-info">
+                                        Showing filtered results ({view === 'myMaterials' 
+                                            ? getFilteredOwnedTokens().length 
+                                            : getFilteredMarketListings().length} of {view === 'myMaterials' 
+                                            ? ownedTokens.length 
+                                            : marketListings.length})
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         {view === 'myMaterials' ? (
                             <>
                                 <h2>My Materials</h2>
                                 {ownedTokens.length === 0 ? (
                                     <p>No materials owned</p>
+                                ) : getFilteredOwnedTokens().length === 0 ? (
+                                    <p>No materials match the current filters</p>
                                 ) : (
                                     <div className="card-grid">
-                                        {ownedTokens.map(id => (
+                                        {getFilteredOwnedTokens().map(id => (
                                             <SupplierNFTCard key={id} tokenId={id} />
                                         ))}
                                     </div>
@@ -885,9 +1060,11 @@ function App() {
                                 <h2>Marketplace</h2>
                                 {marketListings.length === 0 ? (
                                     <p>No listings</p>
+                                ) : getFilteredMarketListings().length === 0 ? (
+                                    <p>No listings match the current filters</p>
                                 ) : (
                                     <div className="card-grid">
-                                        {marketListings.map(l => (
+                                        {getFilteredMarketListings().map(l => (
                                             <div key={l.tokenId} className="nft-card">
                                                 <NFTCard tokenId={l.tokenId} />
                                                 <p>{l.price} ETH</p>

@@ -331,6 +331,168 @@ a[href*="/nft/"]:not(.side-panel a):hover {
     justify-content: center;
 }
 
+/* Filter Toggle */
+.filter-toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.filter-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background-color: #fff;
+    color: #2d5016;
+    border: 2px solid #2d5016;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.filter-toggle-btn:hover {
+    background-color: #2d5016;
+    color: white;
+}
+
+.filter-icon {
+    font-size: 16px;
+}
+
+.filter-badge {
+    background-color: #2d5016;
+    color: white;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 20px;
+    text-align: center;
+}
+
+.filter-toggle-btn:hover .filter-badge {
+    background-color: white;
+    color: #2d5016;
+}
+
+.filter-arrow {
+    margin-left: auto;
+    transition: transform 0.3s ease;
+    font-size: 12px;
+}
+
+.filter-arrow.open {
+    transform: rotate(180deg);
+}
+
+.clear-filters-btn-inline {
+    padding: 10px 16px;
+    background-color: #fff;
+    color: #d32f2f;
+    border: 2px solid #d32f2f;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.clear-filters-btn-inline:hover {
+    background-color: #d32f2f;
+    color: white;
+}
+
+/* Filter Section */
+.filter-section {
+    background-color: #fff;
+    border: 1px solid #d4c5a9;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 1000px;
+    }
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.filter-field label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e3a2f;
+}
+
+.filter-field input {
+    padding: 10px 12px;
+    border: 2px solid #d4c5a9;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background-color: #fff;
+}
+
+.filter-field input:focus {
+    outline: none;
+    border-color: #2d5016;
+    box-shadow: 0 0 0 3px rgba(45, 80, 22, 0.1);
+}
+
+.clear-filters-btn {
+    padding: 8px 16px;
+    background-color: #fff;
+    color: #2d5016;
+    border: 2px solid #2d5016;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.clear-filters-btn:hover:not(:disabled) {
+    background-color: #2d5016;
+    color: white;
+}
+
+.clear-filters-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.filter-info {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #666;
+    font-style: italic;
+}
+
 /* Mint Form Styling */
 .mint-form-container {
     max-width: 800px;
