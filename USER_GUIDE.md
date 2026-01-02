@@ -16,7 +16,7 @@ This platform enables transparent, verifiable tracking and trading of constructi
 
 ### Key Concepts
 - **NFTs (Non-Fungible Tokens)**: Digital certificates representing physical materials
-- **IPFS**: Decentralized storage for material metadata
+- **IPFS**: Decentralized storage for material static metadata
 - **QR Codes**: Physical-digital linking mechanism
 - **Blockchain**: Immutable record of all transactions and status changes
 
@@ -255,7 +255,6 @@ Materials progress through these statuses:
 2. **Issue Certificate**
    - Enter supplier's wallet address
    - Select expiration period
-   - Enter metadata URI (IPFS link to certificate data)
    - Click **"Issue Certificate"**
    - Approve transaction
 
@@ -322,7 +321,7 @@ Suppliers can create composite materials:
 1. When minting, select existing materials from "Assembled from" section
 2. Only materials with status "Available" or "Delivered" can be selected
 3. Selected materials are consumed (status → Assembled)
-4. New material's metadata includes `nfts_consumed` array
+4. New material's static metadata includes `nfts_consumed` array
 5. Transaction history shows assembly relationships
 
 ### Filtering and Search
@@ -436,7 +435,8 @@ For technical issues:
 
 - **NFT**: Non-Fungible Token - unique digital certificate
 - **IPFS**: InterPlanetary File System - decentralized storage
-- **Metadata**: Information about the material (stored on IPFS)
+- **Static Metadata**: Information about the material stored on IPFS
+- **Dynamic Metadata**: Information about the material stored on-chain
 - **Provenance**: Complete history of ownership and status changes
 - **SoulBound Token**: Non-transferable token representing user role
 - **Certificate NFT**: Token proving supplier certification
