@@ -743,3 +743,51 @@ textarea.form-input {
     resize: vertical;
     font-family: inherit;
 }
+
+/* Custom Expiration Inputs */
+.expiration-inputs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.expiration-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.expiration-field label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e3a2f;
+}
+
+.expiration-field input {
+    padding: 10px 12px;
+    border: 2px solid #d4c5a9;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background-color: #fff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.expiration-field input:focus {
+    outline: none;
+    border-color: #2d5016;
+    box-shadow: 0 0 0 3px rgba(45, 80, 22, 0.1);
+}
+
+.expiration-preview {
+    margin-top: 12px;
+    padding: 10px;
+    background-color: #f5f5e8;
+    border: 1px solid #d4c5a9;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #2d5016;
+    font-weight: 500;
+}

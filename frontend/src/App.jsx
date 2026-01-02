@@ -229,6 +229,11 @@ function App() {
         const [assembleTokens, setAssembleTokens] = useState([])
         const [selectedTokens, setSelectedTokens] = useState([])
         const [certificationId, setCertificationId] = useState('')
+        const [customExpiration, setCustomExpiration] = useState({
+            hours: 0,
+            days: 0,
+            months: 0
+        })
 
         useEffect(() => {
             const loadAssembleTokens = async () => {
@@ -329,11 +334,25 @@ function App() {
                 const cid = uploadResult.IpfsHash
                 const tokenURI = `${PINATA_GATEWAY}/${cid}`
 
-                const exp = form.customExpiration.value
-                    ? Number(form.customExpiration.value)
-                    : 0
+                // Calculate expiration timestamp from hours, days, and months
+                let exp = 0
+                if (customExpiration.hours > 0 || customExpiration.days > 0 || customExpiration.months > 0) {
+                    const now = Math.floor(Date.now() / 1000)
+                    const hoursInSeconds = customExpiration.hours * 3600
+                    const daysInSeconds = customExpiration.days * 86400
+                    const monthsInSeconds = customExpiration.months * 30 * 86400 // Approximate: 30 days per month
+                    exp = now + hoursInSeconds + daysInSeconds + monthsInSeconds
+                }
 
-                const tx = exp ? await materialContract.mint(tokenURI, exp) : await materialContract.mint(tokenURI)
+                // Explicitly call the correct mint function to avoid ambiguity
+                let tx
+                if (exp > 0) {
+                    // Call mint(string,uint256) - with custom expiration
+                    tx = await materialContract["mint(string,uint256)"](tokenURI, exp)
+                } else {
+                    // Call mint(string) - with default expiration
+                    tx = await materialContract["mint(string)"](tokenURI)
+                }
 
                 await tx.wait()
 
@@ -347,6 +366,7 @@ function App() {
                 await loadOwnedMaterials()
                 form.reset()
                 setSelectedTokens([])
+                setCustomExpiration({ hours: 0, days: 0, months: 0 })
                 alert("Minted!")
                 navigate('/')
             } catch (err) {
@@ -481,14 +501,54 @@ function App() {
                         />
                     </FormField>
 
-                    <FormField
-                        label="Custom Expiration (Optional)"
-                        name="customExpiration"
-                        type="number"
-                        placeholder="Unix timestamp (optional)"
-                        tooltip="Optional: Unix timestamp for custom expiration. If not provided, default expiration will be used. Must be a future timestamp."
-                        className="input input-bordered"
-                    />
+                    <div className="form-section">
+                        <h3>
+                            Custom Expiration (Optional)
+                            <Tooltip text="Set a custom expiration time for this material. Leave all fields at 0 to use the default 6-month expiration. The values will be converted to a Unix timestamp automatically.">
+                                <span className="info-icon">?</span>
+                            </Tooltip>
+                        </h3>
+                        <div className="expiration-inputs">
+                            <div className="expiration-field">
+                                <label>Months</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={customExpiration.months}
+                                    onChange={(e) => setCustomExpiration(prev => ({ ...prev, months: Math.max(0, parseInt(e.target.value) || 0) }))}
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="expiration-field">
+                                <label>Days</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={customExpiration.days}
+                                    onChange={(e) => setCustomExpiration(prev => ({ ...prev, days: Math.max(0, parseInt(e.target.value) || 0) }))}
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="expiration-field">
+                                <label>Hours</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={customExpiration.hours}
+                                    onChange={(e) => setCustomExpiration(prev => ({ ...prev, hours: Math.max(0, parseInt(e.target.value) || 0) }))}
+                                    placeholder="0"
+                                />
+                            </div>
+                        </div>
+                        {(customExpiration.hours > 0 || customExpiration.days > 0 || customExpiration.months > 0) && (
+                            <p className="expiration-preview">
+                                Expiration: {new Date((Math.floor(Date.now() / 1000) + 
+                                    customExpiration.hours * 3600 + 
+                                    customExpiration.days * 86400 + 
+                                    customExpiration.months * 30 * 86400) * 1000).toLocaleString()}
+                            </p>
+                        )}
+                    </div>
 
                     <div className="form-section">
                         <h3>
