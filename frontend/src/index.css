@@ -258,13 +258,19 @@ a[href*="/nft/"]:not(.side-panel a):hover {
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 20px;
+    padding: 20px 0;
+    position: relative;
 }
 
 .menu {
     display: flex;
     gap: 10px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    align-items: center;
 }
 
 .menu button {
@@ -286,8 +292,30 @@ a[href*="/nft/"]:not(.side-panel a):hover {
     box-shadow: 0 2px 8px rgba(45, 80, 22, 0.3);
 }
 
+.create-nft-btn {
+    display: inline-block;
+    background-color: #2d5016;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(45, 80, 22, 0.2);
+    border: none;
+    cursor: pointer;
+}
+
+.create-nft-btn:hover {
+    background-color: #3d6a1f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(45, 80, 22, 0.3);
+    text-decoration: none;
+}
+
 .user-info {
-    text-align: right;
+    text-align: left;
     background: linear-gradient(135deg, #ffffff 0%, #f9f9f5 100%);
     border: 1px solid #d4c5a9;
     border-radius: 12px;
@@ -303,6 +331,7 @@ a[href*="/nft/"]:not(.side-panel a):hover {
     font-size: 14px;
     color: #2d3436;
     font-weight: 500;
+    text-align: left;
 }
 
 .user-info p:first-child {
@@ -322,6 +351,36 @@ a[href*="/nft/"]:not(.side-panel a):hover {
 
 .side-panel {
     flex: 1;
+}
+
+.certificate-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.revoke-certificate-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.revoke-certificate-btn {
+    background-color: #d32f2f;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(211, 47, 47, 0.2);
+}
+
+.revoke-certificate-btn:hover {
+    background-color: #b71c1c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
 }
 
 .card-grid {
@@ -458,10 +517,22 @@ a[href*="/nft/"]:not(.side-panel a):hover {
     background-color: #fff;
 }
 
-.filter-field input:focus {
+.filter-field input:focus,
+.filter-field select:focus {
     outline: none;
     border-color: #2d5016;
     box-shadow: 0 0 0 3px rgba(45, 80, 22, 0.1);
+}
+
+.filter-field select {
+    padding: 10px 12px;
+    border: 2px solid #d4c5a9;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background-color: #fff;
+    cursor: pointer;
+    font-family: inherit;
 }
 
 .clear-filters-btn {
@@ -790,4 +861,112 @@ textarea.form-input {
     font-size: 14px;
     color: #2d5016;
     font-weight: 500;
+}
+
+/* Transaction History */
+.history-toggle-btn {
+    padding: 10px 20px;
+    background-color: #2d5016;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 20px;
+}
+
+.history-toggle-btn:hover {
+    background-color: #3d6a1f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(45, 80, 22, 0.3);
+}
+
+.transaction-history {
+    background-color: #fff;
+    border: 1px solid #d4c5a9;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.history-item {
+    background-color: #f9f9f5;
+    border: 1px solid #d4c5a9;
+    border-radius: 8px;
+    padding: 16px;
+    transition: all 0.3s ease;
+}
+
+.history-item:hover {
+    border-color: #2d5016;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #d4c5a9;
+}
+
+.history-type {
+    font-weight: 600;
+    font-size: 16px;
+    color: #2d5016;
+}
+
+.history-date {
+    font-size: 13px;
+    color: #666;
+}
+
+.history-item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.history-item-details p {
+    margin: 0;
+    font-size: 14px;
+    color: #2d3436;
+}
+
+.history-item-details ul {
+    margin: 8px 0 0 20px;
+    padding: 0;
+}
+
+.history-item-details li {
+    margin: 4px 0;
+}
+
+.history-tx {
+    margin-top: 8px !important;
+    padding-top: 8px;
+    border-top: 1px solid #d4c5a9;
+    font-size: 12px !important;
+    color: #666 !important;
+}
+
+.history-tx a {
+    color: #2d5016;
+    text-decoration: none;
+    cursor: pointer;
+    margin-left: 4px;
+}
+
+.history-tx a:hover {
+    text-decoration: underline;
 }

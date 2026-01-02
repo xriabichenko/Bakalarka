@@ -171,6 +171,13 @@ function App() {
     }
 
     const revokeCertificate = async () => {
+        const confirmed = window.confirm(
+            "WARNING: After revoking this certificate, this supplier will NOT be able to issue a certificate again.\n\n" +
+            "This action cannot be undone. Are you sure you want to revoke this certificate?"
+        )
+        
+        if (!confirmed) return
+        
         const addr = address
         const tx = await certificateContract.revokeCertificate(addr)
         await tx.wait()
@@ -252,7 +259,11 @@ function App() {
                 const available = []
                 for (let id of tokens) {
                     const mat = await materialContract.materials(id)
-                    if (Number(mat.status) !== 3) available.push(id)
+                    const status = Number(mat.status)
+                    // Only include tokens with status Available (0) or Delivered (2)
+                    if (status === 0 || status === 2) {
+                        available.push(id)
+                    }
                 }
                 setAssembleTokens(available)
             }
@@ -557,21 +568,21 @@ function App() {
                                 <span className="info-icon">?</span>
                             </Tooltip>
                         </h3>
-                        <div className="assemble-list">
-                            {assembleTokens.length === 0 ? (
-                                <p>No materials available for assembly</p>
-                            ) : (
-                                assembleTokens.map(id => (
+                    <div className="assemble-list">
+                        {assembleTokens.length === 0 ? (
+                            <p>No materials available for assembly</p>
+                        ) : (
+                            assembleTokens.map(id => (
                                     <div key={id} className="assemble-item">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedTokens.includes(id)}
-                                            onChange={() => toggleSelect(id)}
-                                        />
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedTokens.includes(id)}
+                                        onChange={() => toggleSelect(id)}
+                                    />
                                         <label>Material #{id}</label>
-                                    </div>
-                                ))
-                            )}
+                                </div>
+                            ))
+                        )}
                         </div>
                     </div>
 
@@ -653,7 +664,9 @@ function App() {
         const [newStatus, setNewStatus] = useState(0)
         const [listing, setListing] = useState(null)
         const [price, setPrice] = useState('')
-        const [consumedTokenIds, setConsumedTokenIds] = useState([])
+        const [transactionHistory, setTransactionHistory] = useState([])
+        const [historyLoading, setHistoryLoading] = useState(false)
+        const [showHistory, setShowHistory] = useState(false)
 
         // Helper function to get valid status transitions based on current status
         const getValidStatusTransitions = (currentStatus) => {
@@ -694,7 +707,7 @@ function App() {
                     if (validTransitions.length > 0) {
                         setNewStatus(validTransitions[0].value)
                     } else {
-                        setNewStatus(Number(mat.status))
+                    setNewStatus(Number(mat.status))
                     }
 
                     const own = await contract.ownerOf(tokenId)
@@ -724,25 +737,6 @@ function App() {
             fetchData()
         }, [tokenId, provider, marketContract])
 
-        useEffect(() => {
-            const findConsumedIds = async () => {
-                if (!metadata?.nfts_consumed || !allTokens.length || !materialContract) return
-                const ids = []
-                for (let cid of metadata.nfts_consumed) {
-                    for (let id of allTokens) {
-                        try {
-                            const mat = await materialContract.materials(id)
-                            if (mat.metadataURI === `${PINATA_GATEWAY}/${cid}`) {
-                                ids.push(id)
-                                break
-                            }
-                        } catch {}
-                    }
-                }
-                setConsumedTokenIds(ids)
-            }
-            findConsumedIds()
-        }, [metadata, allTokens, materialContract])
 
         const handleUpdateStatus = async () => {
             if (!signer || owner !== address.toLowerCase()) return alert('Not owner or not connected')
@@ -808,6 +802,345 @@ function App() {
             }
         }
 
+        const loadTransactionHistory = async () => {
+            if (!provider || !materialContract || !marketContract) return
+            
+            setHistoryLoading(true)
+            const history = []
+
+            try {
+                // 1. Get Transfer events (creation and transfers)
+                const material = new ethers.Contract(MATERIAL_ADDR, MaterialABI.abi, provider)
+                const transferFilter = material.filters.Transfer(null, null, tokenId)
+                const transferEvents = await material.queryFilter(transferFilter, 0)
+
+                // Track status changes by querying material status at each block
+                const statusHistory = []
+                let previousStatus = null
+                let previousBlockNumber = null
+
+                for (const event of transferEvents) {
+                    const { from, to, tokenId: eventTokenId } = event.args
+                    const block = await provider.getBlock(event.blockNumber)
+                    
+                    // Get material status at this block
+                    try {
+                        const matAtBlock = await material.materials(tokenId, { blockTag: event.blockNumber })
+                        const currentStatus = Number(matAtBlock.status)
+                        const statusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][currentStatus]
+                        
+                        // If status changed since last event, record it
+                        if (previousStatus !== null && previousBlockNumber !== null && previousStatus !== currentStatus) {
+                            const prevStatusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][previousStatus]
+                            // Status update happened between previous block and this block
+                            // Use the current block as approximation
+                            statusHistory.push({
+                                type: 'status_update',
+                                fromStatus: prevStatusLabel,
+                                toStatus: statusLabel,
+                                timestamp: block.timestamp,
+                                blockNumber: event.blockNumber,
+                                txHash: event.transactionHash,
+                                label: `Status Updated: ${prevStatusLabel} ->${statusLabel}`
+                            })
+                        }
+                        previousStatus = currentStatus
+                        previousBlockNumber = event.blockNumber
+                    } catch (err) {
+                        console.error('Error querying status at block:', err)
+                    }
+                    
+                    const zeroAddress = '0x0000000000000000000000000000000000000000'
+                    if (from.toLowerCase() === zeroAddress) {
+                        // Creation (minting)
+                        try {
+                            const matAtBlock = await material.materials(tokenId, { blockTag: event.blockNumber })
+                            const initialStatus = ['Available', 'InTransit', 'Delivered', 'Assembled'][Number(matAtBlock.status)]
+                            history.push({
+                                type: 'creation',
+                                from: from,
+                                to: to,
+                                status: initialStatus,
+                                timestamp: block.timestamp,
+                                blockNumber: event.blockNumber,
+                                txHash: event.transactionHash,
+                                label: `NFT Created (Minted) - Status: ${initialStatus}`
+                            })
+                        } catch (err) {
+                            history.push({
+                                type: 'creation',
+                                from: from,
+                                to: to,
+                                timestamp: block.timestamp,
+                                blockNumber: event.blockNumber,
+                                txHash: event.transactionHash,
+                                label: 'NFT Created (Minted)'
+                            })
+                        }
+                    } else {
+                        // Transfer/Purchase
+                        history.push({
+                            type: 'transfer',
+                            from: from,
+                            to: to,
+                            timestamp: block.timestamp,
+                            blockNumber: event.blockNumber,
+                            txHash: event.transactionHash,
+                            label: 'Transferred'
+                        })
+                    }
+                }
+
+                // 2. Get Marketplace Listed events and check for status changes
+                const listedFilter = marketContract.filters.Listed(null, MATERIAL_ADDR, tokenId)
+                const listedEvents = await marketContract.queryFilter(listedFilter, 0)
+                
+                for (const event of listedEvents) {
+                    const { seller, price } = event.args
+                    const block = await provider.getBlock(event.blockNumber)
+                    
+                    // Check status at this block
+                    try {
+                        const matAtBlock = await material.materials(tokenId, { blockTag: event.blockNumber })
+                        const currentStatus = Number(matAtBlock.status)
+                        const statusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][currentStatus]
+                        
+                        if (previousStatus !== null && previousStatus !== currentStatus) {
+                            const prevStatusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][previousStatus]
+                            statusHistory.push({
+                                type: 'status_update',
+                                fromStatus: prevStatusLabel,
+                                toStatus: statusLabel,
+                                timestamp: block.timestamp,
+                                blockNumber: event.blockNumber,
+                                txHash: event.transactionHash,
+                                label: `Status Updated: ${prevStatusLabel} ->${statusLabel}`
+                            })
+                        }
+                        previousStatus = currentStatus
+                        previousBlockNumber = event.blockNumber
+                    } catch (err) {
+                        console.error('Error querying status at listed block:', err)
+                    }
+                    
+                    history.push({
+                        type: 'listed',
+                        seller: seller,
+                        price: formatEther(price),
+                        timestamp: block.timestamp,
+                        blockNumber: event.blockNumber,
+                        txHash: event.transactionHash,
+                        label: 'Listed on Marketplace'
+                    })
+                }
+
+                // 3. Get Marketplace Sold events and check for status changes
+                const soldFilter = marketContract.filters.Sold(null, MATERIAL_ADDR, tokenId)
+                const soldEvents = await marketContract.queryFilter(soldFilter, 0)
+                
+                for (const event of soldEvents) {
+                    const { buyer, price } = event.args
+                    const block = await provider.getBlock(event.blockNumber)
+                    
+                    // Check status at this block
+                    try {
+                        const matAtBlock = await material.materials(tokenId, { blockTag: event.blockNumber })
+                        const currentStatus = Number(matAtBlock.status)
+                        const statusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][currentStatus]
+                        
+                        if (previousStatus !== null && previousStatus !== currentStatus) {
+                            const prevStatusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][previousStatus]
+                            statusHistory.push({
+                                type: 'status_update',
+                                fromStatus: prevStatusLabel,
+                                toStatus: statusLabel,
+                                timestamp: block.timestamp,
+                                blockNumber: event.blockNumber,
+                                txHash: event.transactionHash,
+                                label: `Status Updated: ${prevStatusLabel} ->${statusLabel}`
+                            })
+                        }
+                        previousStatus = currentStatus
+                        previousBlockNumber = event.blockNumber
+                    } catch (err) {
+                        console.error('Error querying status at sold block:', err)
+                    }
+                    
+                    history.push({
+                        type: 'sold',
+                        buyer: buyer,
+                        price: formatEther(price),
+                        timestamp: block.timestamp,
+                        blockNumber: event.blockNumber,
+                        txHash: event.transactionHash,
+                        label: 'Sold on Marketplace'
+                    })
+                }
+
+                // 4. Get Marketplace Cancelled events and check for status changes
+                const cancelledFilter = marketContract.filters.Cancelled(null, MATERIAL_ADDR, tokenId)
+                const cancelledEvents = await marketContract.queryFilter(cancelledFilter, 0)
+                
+                for (const event of cancelledEvents) {
+                    const { seller } = event.args
+                    const block = await provider.getBlock(event.blockNumber)
+                    
+                    // Check status at this block
+                    try {
+                        const matAtBlock = await material.materials(tokenId, { blockTag: event.blockNumber })
+                        const currentStatus = Number(matAtBlock.status)
+                        const statusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][currentStatus]
+                        
+                        if (previousStatus !== null && previousStatus !== currentStatus) {
+                            const prevStatusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][previousStatus]
+                            statusHistory.push({
+                                type: 'status_update',
+                                fromStatus: prevStatusLabel,
+                                toStatus: statusLabel,
+                                timestamp: block.timestamp,
+                                blockNumber: event.blockNumber,
+                                txHash: event.transactionHash,
+                                label: `Status Updated: ${prevStatusLabel} ->${statusLabel}`
+                            })
+                        }
+                        previousStatus = currentStatus
+                        previousBlockNumber = event.blockNumber
+                    } catch (err) {
+                        console.error('Error querying status at cancelled block:', err)
+                    }
+                    
+                    history.push({
+                        type: 'cancelled',
+                        seller: seller,
+                        timestamp: block.timestamp,
+                        blockNumber: event.blockNumber,
+                        txHash: event.transactionHash,
+                        label: 'Listing Cancelled'
+                    })
+                }
+
+                // 5. Check for status updates between last event and current state
+                // Also scan recent blocks to find status updates that happened without other events
+                try {
+                    const currentMat = await material.materials(tokenId)
+                    const currentStatus = Number(currentMat.status)
+                    const currentStatusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][currentStatus]
+                    const currentBlock = await provider.getBlock('latest')
+                    
+                    // If we have a previous status and it's different, there was a status update
+                    if (previousStatus !== null && previousStatus !== currentStatus) {
+                        const prevStatusLabel = ['Available', 'InTransit', 'Delivered', 'Assembled'][previousStatus]
+                        
+                        // Try to find the exact block where status changed by scanning backwards
+                        let statusChangeBlock = currentBlock.number
+                        let foundExactBlock = false
+                        
+                        // Scan last 100 blocks to find when status changed (if not too expensive)
+                        if (previousBlockNumber && currentBlock.number - previousBlockNumber < 100) {
+                            for (let blockNum = previousBlockNumber + 1; blockNum <= currentBlock.number; blockNum++) {
+                                try {
+                                    const matAtBlock = await material.materials(tokenId, { blockTag: blockNum })
+                                    const statusAtBlock = Number(matAtBlock.status)
+                                    if (statusAtBlock !== previousStatus) {
+                                        statusChangeBlock = blockNum
+                                        const changeBlock = await provider.getBlock(blockNum)
+                                        statusHistory.push({
+                                            type: 'status_update',
+                                            fromStatus: prevStatusLabel,
+                                            toStatus: currentStatusLabel,
+                                            timestamp: changeBlock.timestamp,
+                                            blockNumber: blockNum,
+                                            txHash: 'found', // Found in block scan
+                                            label: `Status Updated: ${prevStatusLabel} ->${currentStatusLabel}`
+                                        })
+                                        foundExactBlock = true
+                                        break
+                                    }
+                                } catch (err) {
+                                    // Continue scanning
+                                }
+                            }
+                        }
+                        
+                        // If we couldn't find exact block, use current block
+                        if (!foundExactBlock) {
+                            statusHistory.push({
+                                type: 'status_update',
+                                fromStatus: prevStatusLabel,
+                                toStatus: currentStatusLabel,
+                                timestamp: currentBlock.timestamp,
+                                blockNumber: currentBlock.number,
+                                txHash: 'recent', // Status updated recently
+                                label: `Status Updated: ${prevStatusLabel} ->${currentStatusLabel}`
+                            })
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error checking current status:', err)
+                }
+
+                // Add status updates to history
+                history.push(...statusHistory)
+
+                // 5. Check for assembling (if metadata has nfts_consumed)
+                if (metadata?.nfts_consumed && metadata.nfts_consumed.length > 0) {
+                    // Calculate consumed token IDs for this specific NFT using allTokens from parent scope
+                    const currentConsumedIds = []
+                    try {
+                        // Use allTokens from parent scope for efficiency
+                        for (let id of allTokens) {
+                            try {
+                                const mat = await material.materials(id)
+                                const cid = mat.metadataURI.replace(PINATA_GATEWAY + '/', '')
+                                if (metadata.nfts_consumed.includes(cid)) {
+                                    currentConsumedIds.push(id)
+                                }
+                            } catch (err) {
+                                // Token doesn't exist or error, skip
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error finding consumed token IDs:', err)
+                    }
+                    
+                    // Find the block where this NFT was created to approximate assembly time
+                    const zeroAddress = '0x0000000000000000000000000000000000000000'
+                    const creationEvent = transferEvents.find(e => e.args.from.toLowerCase() === zeroAddress)
+                    if (creationEvent && currentConsumedIds.length > 0) {
+                        const block = await provider.getBlock(creationEvent.blockNumber)
+                        history.push({
+                            type: 'assembled',
+                            consumedTokens: currentConsumedIds,
+                            timestamp: block.timestamp,
+                            blockNumber: creationEvent.blockNumber,
+                            txHash: creationEvent.transactionHash,
+                            label: 'Assembled from Materials'
+                        })
+                    }
+                }
+
+                // Sort by block number (oldest first)
+                history.sort((a, b) => a.blockNumber - b.blockNumber)
+                setTransactionHistory(history)
+            } catch (err) {
+                console.error('Error loading transaction history:', err)
+            } finally {
+                setHistoryLoading(false)
+            }
+        }
+
+        useEffect(() => {
+            // Reset transaction history when tokenId changes
+            setTransactionHistory([])
+            setShowHistory(false)
+        }, [tokenId])
+
+        useEffect(() => {
+            if (showHistory && transactionHistory.length === 0 && !historyLoading) {
+                loadTransactionHistory()
+            }
+        }, [showHistory, provider, materialContract, marketContract, tokenId, metadata])
+
         if (!material || !metadata) return <div>Loading...</div>
 
         return (
@@ -826,16 +1159,6 @@ function App() {
                 <p>Weight: {metadata.weight} {metadata.measureUnit}</p>
                 <p>Dimensions: {metadata.dimensions.length} x {metadata.dimensions.width} x {metadata.dimensions.height}</p>
 
-                {metadata.nfts_consumed && consumedTokenIds.length > 0 && (
-                    <div>
-                        <h2>Assembled from:</h2>
-                        <ul>
-                            {consumedTokenIds.map(id => (
-                                <li key={id}><Link to={`/nft/${id}`}>Material #{id}</Link></li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
 
                 <h2>Dynamic Metadata (On-Chain)</h2>
                 <p>Current Status: {['Available', 'InTransit', 'Delivered', 'Assembled'][Number(material.status)]}</p>
@@ -894,6 +1217,98 @@ function App() {
                     </button>
                 )}
 
+                <h2>Transaction History</h2>
+                <button 
+                    className="history-toggle-btn"
+                    onClick={() => {
+                        setShowHistory(!showHistory)
+                        if (!showHistory && transactionHistory.length === 0) {
+                            loadTransactionHistory()
+                        }
+                    }}
+                >
+                    {showHistory ? '▼ Hide History' : '▶ Show History'}
+                </button>
+
+                {showHistory && (
+                    <div className="transaction-history">
+                        {historyLoading ? (
+                            <p>Loading transaction history...</p>
+                        ) : transactionHistory.length === 0 ? (
+                            <p>No transaction history found.</p>
+                        ) : (
+                            <div className="history-list">
+                                {transactionHistory.map((item, index) => (
+                                    <div key={`${item.txHash}-${index}`} className="history-item">
+                                        <div className="history-item-header">
+                                            <span className="history-type">{item.label}</span>
+                                            <span className="history-date">
+                                                {new Date(item.timestamp * 1000).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="history-item-details">
+                                            {item.type === 'creation' && (
+                                                <p>Minted to: {item.to.slice(0, 6)}...{item.to.slice(-4)}</p>
+                                            )}
+                                            {item.type === 'transfer' && (
+                                                <>
+                                                    <p>From: {item.from.slice(0, 6)}...{item.from.slice(-4)}</p>
+                                                    <p>To: {item.to.slice(0, 6)}...{item.to.slice(-4)}</p>
+                                                </>
+                                            )}
+                                            {item.type === 'listed' && (
+                                                <p>Listed by: {item.seller.slice(0, 6)}...{item.seller.slice(-4)} for {item.price} ETH</p>
+                                            )}
+                                            {item.type === 'sold' && (
+                                                <p>Sold to: {item.buyer.slice(0, 6)}...{item.buyer.slice(-4)} for {item.price} ETH</p>
+                                            )}
+                                            {item.type === 'cancelled' && (
+                                                <p>Cancelled by: {item.seller.slice(0, 6)}...{item.seller.slice(-4)}</p>
+                                            )}
+                                            {item.type === 'status_update' && (
+                                                <p>Status changed from <strong>{item.fromStatus}</strong> to <strong>{item.toStatus}</strong></p>
+                                            )}
+                                            {item.type === 'assembled' && (
+                                                <div>
+                                                    <p>Assembled from {item.consumedTokens.length} material(s):</p>
+                                                    <ul>
+                                                        {item.consumedTokens.map(id => (
+                                                            <li key={id}><Link to={`/nft/${id}`}>Material #{id}</Link></li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            <p className="history-tx">
+                                                Block: {item.blockNumber} | 
+                                                {item.txHash && item.txHash !== 'recent' && item.txHash !== 'pending' && item.txHash !== 'found' ? (
+                                                    <>
+                                                        TX: <a 
+                                                            href={`#`} 
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                navigator.clipboard.writeText(item.txHash)
+                                                                alert('Transaction hash copied to clipboard!')
+                                                            }}
+                                                        >
+                                                            {item.txHash.slice(0, 10)}...{item.txHash.slice(-8)}
+                                                        </a>
+                                                    </>
+                                                ) : (
+                                                    <span style={{ color: '#666', fontStyle: 'italic' }}>
+                                                        {item.txHash === 'recent' ? 'Recent update (approximate)' : 
+                                                         item.txHash === 'found' ? 'Status change detected' : 
+                                                         item.txHash === 'pending' ? 'Pending' : 'No transaction hash'}
+                                                    </span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <h2>QR Code for this NFT Page</h2>
                 <canvas id="qrCanvas"></canvas>
             </div>
@@ -907,21 +1322,26 @@ function App() {
             name: '',
             supplierName: '',
             batchNumber: '',
-            description: ''
+            description: '',
+            status: ''
         });
         const [materialsMetadata, setMaterialsMetadata] = useState({}); // tokenId -> metadata mapping
+        const [materialsStatus, setMaterialsStatus] = useState({}); // tokenId -> status mapping
 
-        // Load metadata for all materials (owned and marketplace)
+        // Load metadata and status for all materials (owned and marketplace)
         useEffect(() => {
             const loadAllMetadata = async () => {
                 if (!provider || !materialContract) return
                 
                 const allTokenIds = new Set([...ownedTokens, ...marketListings.map(l => l.tokenId)])
                 const metadataMap = {}
+                const statusMap = {}
                 
                 for (const tokenId of allTokenIds) {
                     try {
                         const mat = await materialContract.materials(tokenId)
+                        statusMap[tokenId] = Number(mat.status) // Store status
+                        
                         if (mat.metadataURI && mat.metadataURI.startsWith(PINATA_GATEWAY)) {
                             const cid = mat.metadataURI.replace(PINATA_GATEWAY + '/', '')
                             const res = await fetch(`${PINATA_GATEWAY}/${cid}`)
@@ -936,13 +1356,14 @@ function App() {
                 }
                 
                 setMaterialsMetadata(metadataMap)
+                setMaterialsStatus(statusMap)
             }
             
             loadAllMetadata()
         }, [provider, materialContract, ownedTokens, marketListings])
 
         // Filter function - checks if material matches all active filters
-        const matchesFilters = (tokenId, metadata) => {
+        const matchesFilters = (tokenId, metadata, materialStatus) => {
             if (!metadata) return false
             
             // Check each filter - all must match (AND logic)
@@ -958,6 +1379,13 @@ function App() {
             if (filters.description && !metadata.description?.toLowerCase().includes(filters.description.toLowerCase())) {
                 return false
             }
+            if (filters.status && materialStatus !== undefined) {
+                const statusLabels = ['Available', 'InTransit', 'Delivered', 'Assembled']
+                const currentStatusLabel = statusLabels[Number(materialStatus)]
+                if (currentStatusLabel.toLowerCase() !== filters.status.toLowerCase()) {
+                    return false
+                }
+            }
             
             return true
         }
@@ -969,7 +1397,8 @@ function App() {
             }
             return ownedTokens.filter(tokenId => {
                 const metadata = materialsMetadata[tokenId]
-                return matchesFilters(tokenId, metadata)
+                const status = materialsStatus[tokenId]
+                return matchesFilters(tokenId, metadata, status)
             })
         }
 
@@ -980,7 +1409,8 @@ function App() {
             }
             return marketListings.filter(listing => {
                 const metadata = materialsMetadata[listing.tokenId]
-                return matchesFilters(listing.tokenId, metadata)
+                const status = materialsStatus[listing.tokenId]
+                return matchesFilters(listing.tokenId, metadata, status)
             })
         }
 
@@ -996,13 +1426,18 @@ function App() {
                 name: '',
                 supplierName: '',
                 batchNumber: '',
-                description: ''
+                description: '',
+                status: ''
             })
         }
 
         return (
             <div className="dashboard">
                 <div className="header">
+                    <div className="user-info">
+                        <p>Registered as: {role}</p>
+                        {role === 'Supplier' && <p>Certificate: {certValid ? "Valid" : "Not valid"}</p>}
+                    </div>
                     <div className="menu">
                         <button 
                             className={view === 'myMaterials' ? 'active' : ''}
@@ -1016,10 +1451,11 @@ function App() {
                         >
                             Marketplace
                         </button>
-                    </div>
-                    <div className="user-info">
-                        <p>Registered as: {role}</p>
-                        {role === 'Supplier' && <p>Certificate: {certValid ? "Valid" : "Not valid"}</p>}
+                        {role === 'Supplier' && certValid && (
+                            <Link to="/mint" className="create-nft-btn">
+                                Create Material NFT
+                            </Link>
+                        )}
                     </div>
                 </div>
                 <div className="main-content">
@@ -1087,6 +1523,19 @@ function App() {
                                         onChange={(e) => handleFilterChange('description', e.target.value)}
                                     />
                                 </div>
+                                <div className="filter-field">
+                                    <label>Status</label>
+                                    <select
+                                        value={filters.status}
+                                        onChange={(e) => handleFilterChange('status', e.target.value)}
+                                    >
+                                        <option value="">All Statuses</option>
+                                        <option value="Available">Available</option>
+                                        <option value="InTransit">In Transit</option>
+                                        <option value="Delivered">Delivered</option>
+                                        <option value="Assembled">Assembled</option>
+                                    </select>
+                                </div>
                                 </div>
                                 {Object.keys(filters).some(key => filters[key]) && (
                                     <p className="filter-info">
@@ -1142,11 +1591,8 @@ function App() {
                         )}
                     </div>
                     <div className="side-panel">
-                        {role === 'Supplier' && certValid && (
-                            <Link to="/mint">Create Material NFT</Link>
-                        )}
                         {isOwner && (
-                            <div>
+                            <div className="certificate-panel">
                                 <h2>Certificate Panel</h2>
                                 <form onSubmit={issueCertificate}>
                                     <select name="expiration" defaultValue="6">
@@ -1158,7 +1604,11 @@ function App() {
                                     <input name="metadataURI" placeholder="metadata URI" />
                                     <button type="submit">Issue Certificate</button>
                                 </form>
-                                <button onClick={revokeCertificate}>Revoke Certificate</button>
+                                <div className="revoke-certificate-container">
+                                    <button onClick={revokeCertificate} className="revoke-certificate-btn">
+                                        Revoke Certificate
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
