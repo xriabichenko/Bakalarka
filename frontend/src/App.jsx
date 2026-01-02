@@ -68,9 +68,13 @@ function App() {
         }
 
         try {
-            const owner = await new ethers.Contract(CERTIFICATE_ADDR, CertificateABI.abi, sig.provider).owner()
+            const certContract = new ethers.Contract(CERTIFICATE_ADDR, CertificateABI.abi, sig.provider)
+            const owner = await certContract.owner()
             setIsOwner(owner.toLowerCase() === addr.toLowerCase())
-        } catch {}
+        } catch (err) {
+            console.error('Error checking certificate owner:', err)
+            setIsOwner(false)
+        }
 
         try {
             const currentRole = await new ethers.Contract(SOULBOUND_ADDR, SoulBoundABI.abi, sig).getRole(addr)
@@ -153,24 +157,38 @@ function App() {
     const issueCertificate = async (e) => {
         e.preventDefault()
         const form = e.target
-        const recipient = address
+        const recipient = form.recipient?.value || address // Allow specifying recipient, default to current user
         const expiration_m = form.expiration.value
-        const metadataURI = form.metadataURI.value || ""
+        const metadataURI = "" // Not used in frontend, but required by smart contract
 
         const seconds = expiration_m * 30 * 24 * 60 * 60
         const expiration_unix = BigInt(Math.floor(Date.now() / 1000) + seconds)
 
-        const tx = await certificateContract.issueCertificate(recipient, expiration_unix, metadataURI)
-        await tx.wait()
+        try {
+            const tx = await certificateContract.issueCertificate(recipient, expiration_unix, metadataURI)
+            await tx.wait()
 
-        const valid = await certificateContract.isCertificateValid(address)
-        setCertValid(valid)
+            // Update certValid if issuing to current user
+            if (recipient.toLowerCase() === address.toLowerCase()) {
+                const valid = await certificateContract.isCertificateValid(address)
+                setCertValid(valid)
+            }
 
-        alert("Certificate issued")
-        form.reset()
+            alert("Certificate issued")
+            form.reset()
+        } catch (err) {
+            console.error('Error issuing certificate:', err)
+            alert("Error issuing certificate: " + err.message)
+        }
     }
 
     const revokeCertificate = async () => {
+        const supplierAddress = prompt(
+            "Enter the supplier address to revoke the certificate for:"
+        )
+        
+        if (!supplierAddress) return
+        
         const confirmed = window.confirm(
             "WARNING: After revoking this certificate, this supplier will NOT be able to issue a certificate again.\n\n" +
             "This action cannot be undone. Are you sure you want to revoke this certificate?"
@@ -178,11 +196,20 @@ function App() {
         
         if (!confirmed) return
         
-        const addr = address
-        const tx = await certificateContract.revokeCertificate(addr)
-        await tx.wait()
-        alert("Certificate revoked")
-        setCertValid(false)
+        try {
+            const tx = await certificateContract.revokeCertificate(supplierAddress)
+            await tx.wait()
+            
+            // Update certValid if revoking for current user
+            if (supplierAddress.toLowerCase() === address.toLowerCase()) {
+                setCertValid(false)
+            }
+            
+            alert("Certificate revoked")
+        } catch (err) {
+            console.error('Error revoking certificate:', err)
+            alert("Error revoking certificate: " + err.message)
+        }
     }
 
     // Tooltip component
@@ -388,7 +415,33 @@ function App() {
 
         return (
             <div className="mint-form-container">
-                <Link to="/">Back</Link>
+                <Link 
+                    to="/dashboard"
+                    style={{
+                        display: 'inline-block',
+                        padding: '10px 20px',
+                        backgroundColor: '#2d5016',
+                        color: '#fff',
+                        textDecoration: 'none',
+                        borderRadius: '8px',
+                        marginBottom: '20px',
+                        fontWeight: '500',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = '#3d6a1f'
+                        e.target.style.transform = 'translateY(-2px)'
+                        e.target.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                    }}
+                    onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = '#2d5016'
+                        e.target.style.transform = 'translateY(0)'
+                        e.target.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                    }}
+                >
+                    Back
+                </Link>
                 <h1>Mint New Material NFT</h1>
 
                 {/* Info Section */}
@@ -1146,7 +1199,33 @@ function App() {
         return (
             <div>
             
-                <Link to="/">Back to Dashboard</Link>
+                <Link 
+                    to="/dashboard"
+                    style={{
+                        display: 'inline-block',
+                        padding: '10px 20px',
+                        backgroundColor: '#2d5016',
+                        color: '#fff',
+                        textDecoration: 'none',
+                        borderRadius: '8px',
+                        marginBottom: '20px',
+                        fontWeight: '500',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = '#3d6a1f'
+                        e.target.style.transform = 'translateY(-2px)'
+                        e.target.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                    }}
+                    onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = '#2d5016'
+                        e.target.style.transform = 'translateY(0)'
+                        e.target.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                    }}
+                >
+                    Back to Dashboard
+                </Link>
                 <h1>Material NFT #{tokenId}</h1>
                 <h2>Static Metadata (from IPFS)</h2>
                 <p>Name: {metadata.name}</p>
@@ -1315,6 +1394,155 @@ function App() {
         )
     }
 
+    const HomePage = () => {
+        const sections = [
+            {
+                number: '01',
+                title: 'Supplier Registration & Certification',
+                description: 'Suppliers register on the platform and receive a digital certificate (Certificate NFT) from authorized certificate providers. This certificate verifies their legitimacy and compliance with industry standards. Certificates can be revoked if non-compliance is detected.'
+            },
+            {
+                number: '02',
+                title: 'Material Tokenization',
+                description: 'Once certified, suppliers can create Material NFTs that represent physical construction materials. Each NFT contains comprehensive metadata stored on IPFS, including origin, batch numbers, certifications, manufacturing dates, and specifications. A QR code links each physical product to its digital NFT certificate.'
+            },
+            {
+                number: '03',
+                title: 'Supply Chain Tracking',
+                description: 'As materials move through the supply chain, their status is updated on the blockchain. Each status change is permanently recorded, creating an immutable audit trail. Materials can also be assembled together, creating new composite products with traceable origins.'
+            },
+            {
+                number: '04',
+                title: 'Decentralized Marketplace',
+                description: 'Both Buyers and Suppliers can browse the marketplace, filter materials by various attributes, and purchase materials directly using cryptocurrency. Each transaction is recorded on the blockchain, ensuring transparency and preventing fraud.'
+            },
+            {
+                number: '05',
+                title: 'Provenance & Verification',
+                description: 'Auditors and stakeholders can access complete provenance records for any material, including its creation, ownership history, status changes, and assembly relationships. The QR code on each physical product provides instant access to this information, ensuring transparancy throughout the construction process.'
+            }
+        ]
+
+        return (
+            <div style={{ 
+                padding: '100px 20px 40px', 
+                maxWidth: '1600px', 
+                margin: '0 auto'
+            }}>
+                <h1 style={{ 
+                    fontSize: '2.5rem', 
+                    color: '#1e3a2f', 
+                    marginBottom: '60px',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    lineHeight: '1.3'
+                }}>
+                    Platform for verifying the origin and trading of building materials and products using Blockchain and NFT technology
+                </h1>
+                
+                <div style={{
+                    display: 'flex',
+                    gap: '20px',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                    marginBottom: '40px'
+                }}>
+                    {sections.map((section, index) => (
+                        <div 
+                            key={index}
+                            style={{
+                                flex: '1 1 280px',
+                                minWidth: '280px',
+                                maxWidth: '320px',
+                                backgroundColor: '#fff',
+                                padding: '30px',
+                                borderRadius: '16px',
+                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                border: '2px solid #d4c5a9',
+                                transition: 'all 0.3s ease',
+                                position: 'relative',
+                                overflow: 'hidden'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-5px)'
+                                e.currentTarget.style.boxShadow = '0 8px 20px rgba(45, 80, 22, 0.2)'
+                                e.currentTarget.style.borderColor = '#2d5016'
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)'
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)'
+                                e.currentTarget.style.borderColor = '#d4c5a9'
+                            }}
+                        >
+                            <div style={{
+                                fontSize: '3rem',
+                                fontWeight: 'bold',
+                                color: '#2d5016',
+                                opacity: 0.2,
+                                position: 'absolute',
+                                top: '10px',
+                                right: '15px',
+                                lineHeight: '1'
+                            }}>
+                                {section.number}
+                            </div>
+                            <h3 style={{ 
+                                color: '#2d5016', 
+                                marginBottom: '15px', 
+                                fontSize: '1.2rem',
+                                fontWeight: 'bold',
+                                marginTop: '10px',
+                                lineHeight: '1.4'
+                            }}>
+                                {section.title}
+                            </h3>
+                            <p style={{ 
+                                color: '#333', 
+                                fontSize: '0.95rem',
+                                lineHeight: '1.7',
+                                margin: 0
+                            }}>
+                                {section.description}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+                
+                {isConnected && address && (
+                    <div style={{ textAlign: 'center', marginTop: '40px' }}>
+                        <Link 
+                            to="/dashboard" 
+                            style={{
+                                display: 'inline-block',
+                                padding: '15px 30px',
+                                backgroundColor: '#2d5016',
+                                color: '#fff',
+                                textDecoration: 'none',
+                                borderRadius: '8px',
+                                fontSize: '1.1rem',
+                                fontWeight: 'bold',
+                                transition: 'all 0.3s ease',
+                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.backgroundColor = '#3a6b1f'
+                                e.target.style.transform = 'translateY(-2px)'
+                                e.target.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.backgroundColor = '#2d5016'
+                                e.target.style.transform = 'translateY(0)'
+                                e.target.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                            }}
+                        >
+                            Go to Dashboard →
+                        </Link>
+                    </div>
+                )}
+            </div>
+        )
+    }
+
     const Dashboard = () => {
         const [view, setView] = useState('myMaterials');
         const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1439,6 +1667,33 @@ function App() {
                         {role === 'Supplier' && <p>Certificate: {certValid ? "Valid" : "Not valid"}</p>}
                     </div>
                     <div className="menu">
+                        <Link 
+                            to="/" 
+                            className="menu-button"
+                            style={{ 
+                                marginRight: '10px',
+                                backgroundColor: '#fff',
+                                color: '#2d5016',
+                                border: '2px solid #2d5016',
+                                padding: '10px 20px',
+                                borderRadius: '12px',
+                                textDecoration: 'none',
+                                fontWeight: '500',
+                                fontSize: '14px',
+                                transition: 'all 0.3s ease',
+                                display: 'inline-block'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.backgroundColor = '#2d5016'
+                                e.target.style.color = 'white'
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.backgroundColor = '#fff'
+                                e.target.style.color = '#2d5016'
+                            }}
+                        >
+                            Home
+                        </Link>
                         <button 
                             className={view === 'myMaterials' ? 'active' : ''}
                             onClick={() => setView('myMaterials')}
@@ -1595,13 +1850,17 @@ function App() {
                             <div className="certificate-panel">
                                 <h2>Certificate Panel</h2>
                                 <form onSubmit={issueCertificate}>
+                                    <input 
+                                        name="recipient" 
+                                        placeholder="Supplier address (optional, your address by def.)" 
+                                        style={{ marginBottom: '10px' }}
+                                    />
                                     <select name="expiration" defaultValue="6">
                                         <option value="6">6 months</option>
                                         <option value="12">12 months</option>
                                         <option value="18">18 months</option>
                                         <option value="24">24 months</option>
                                     </select>
-                                    <input name="metadataURI" placeholder="metadata URI" />
                                     <button type="submit">Issue Certificate</button>
                                 </form>
                                 <div className="revoke-certificate-container">
@@ -1648,7 +1907,8 @@ function App() {
                     </div>
                 ) : (
                     <Routes>
-                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/mint" element={<MintForm />} />
                         <Route path="/nft/:tokenId" element={<NFTDetail />} />
                     </Routes>
